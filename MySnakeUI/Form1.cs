@@ -1,21 +1,25 @@
+using StructuresLibrary;
+using System.Diagnostics;
+
 namespace MySnakeUI
 {
     public partial class Form1 : Form
     {
         private const int cols = 10;
         private const int rows = 10;
-
+        private const int SNAKE_HEAD = 1;
         private int cellWidth, cellHeight;
         private int score, bestScore = 0;
         private DateTime startTime;
 
         private Point snakeHead;
-        private List<Point> snakeBody;
         private SnakeDirection direction;
 
         private Random rand = new Random();
 
         private Point apple;
+
+        private Deque<Point> snakeBody = new Deque<Point>();
 
         public Form1()
         {
@@ -31,7 +35,14 @@ namespace MySnakeUI
         private void StartNewGame()
         {
             ResetAll();
+
+            RedrawGrid();
+            
             PlaceApple();
+            RedrawApple();
+            
+            RedrawSnake();
+
             MakeStep();
             timer1.Start();
         }
@@ -47,11 +58,11 @@ namespace MySnakeUI
         private void ResetSnakeAndDirection()
         {
             snakeHead = new Point(2, 0);
-            snakeBody = new List<Point>()
+            snakeBody.Clear();
+            for (int i = 0; i < 2; i++)
             {
-                new Point(0, 0),
-                new Point(1, 0),
-            };
+                snakeBody.AddLast(new Point(i, 0));
+            }
             direction = SnakeDirection.Right;
         }
 
@@ -75,7 +86,7 @@ namespace MySnakeUI
 
             do
             {
-                // Выбираем новую точку для яблока, которая не занята змейкой
+                // Choose a new point for the apple that is not occupied by the snake
                 ap = new Point(rand.Next(0, cols), rand.Next(0, rows));
             } while (snakeBody.Contains(ap) || snakeHead == ap);
 
@@ -88,8 +99,9 @@ namespace MySnakeUI
 
             int cellMiddleY = cellHeight * apple.Y;
             int cellMiddleX = cellWidth * apple.X;
-            // Отрисовываем новое яблоко
+            // Draw a new apple
             gr.FillEllipse(Brushes.Red, cellMiddleX, cellMiddleY, cellWidth, cellHeight);
+            pictureBox1.Invalidate();
         }
 
         private void RedrawGrid()
@@ -97,13 +109,13 @@ namespace MySnakeUI
             using var gr = Graphics.FromImage(pictureBox1.Image);
             gr.Clear(Color.White);
 
-            // Рисуем вертикальные линии
+            // Draw vertical lines
             for (int i = 1; i < cols; i++)
             {
                 gr.DrawLine(Pens.Black, cellWidth * i, 0, cellWidth * i, pictureBox1.Height);
             }
 
-            // Рисуем горизонтальные линии
+            // Draw horizontal lines
             for (int i = 1; i < rows; i++)
             {
                 gr.DrawLine(Pens.Black, 0, cellHeight * i, pictureBox1.Width, cellHeight * i);
@@ -123,7 +135,7 @@ namespace MySnakeUI
 
             var nextHead = new Point(snakeHead.X + delta.X, snakeHead.Y + delta.Y);
 
-            // Предугадываем выход за границы поля или столкновение со своим хвостом
+            // Anticipate going beyond the boundaries of the field or a collision with our tail
             if (nextHead.X < 0
                 || nextHead.Y < 0
                 || nextHead.X >= cols
@@ -157,7 +169,7 @@ namespace MySnakeUI
 
         private void Form1_KeyDown(object sender, KeyEventArgs e)
         {
-            // Не разрешаем движение змейки в обратном направлении
+            // Do not allow the movement of the snake in the opposite direction
             if (e.KeyCode == Keys.Left && direction != SnakeDirection.Right)
             {
                 direction = SnakeDirection.Left;
@@ -193,12 +205,9 @@ namespace MySnakeUI
             CheckCollision();
             if (timer1.Enabled)
             {
-                RedrawGrid();
-                RedrawApple();
                 ActionSnake();
-                RedrawSnake();
             }
-            RedrawScore();
+            RefreshScore();
         }
 
         private void CountTime()
@@ -213,14 +222,14 @@ namespace MySnakeUI
                             + ":" + (seconds > 9 ? seconds.ToString() : $"0{seconds}");
         }
 
-        private void RedrawScore()
+        private void RefreshScore()
         {
             lblScoreNum.Text = score.ToString();
         }
 
         private void ActionSnake()
         {
-            // Указывает, куда нужно подвинуть змейку
+            // Indicates where to move the snake
             Point delta = GetDeltaPoint();
 
             var nextHead = new Point(snakeHead.X + delta.X, snakeHead.Y + delta.Y);
@@ -250,8 +259,13 @@ namespace MySnakeUI
 
         private void EatApple(Point nextHead)
         {
-            snakeBody.Add(snakeHead);
+            using var gr = Graphics.FromImage(pictureBox1.Image);
+
+            snakeBody.AddLast(snakeHead);
             snakeHead = nextHead;
+
+            gr.FillRectangle(Brushes.Black, snakeHead.X * cellWidth, snakeHead.Y * cellHeight, cellWidth, cellHeight);
+            pictureBox1.Invalidate();
 
             if (!IsStayPlace())
             {
@@ -272,28 +286,26 @@ namespace MySnakeUI
 
         private bool IsStayPlace()
         {
-            int snakeLength = snakeBody.Count + 1; // количество элементов змейки + голова
+            int snakeLength = snakeBody.Length + SNAKE_HEAD;
             return snakeLength < cols * rows;
         }
 
         private void MoveSnake()
         {
-            // Указывает, куда нужно подвинуть змейку
             Point delta = GetDeltaPoint();
 
-            // Перемещаем голову
-            snakeHead.X += delta.X;
-            snakeHead.Y += delta.Y;
+            Point lastPeace = snakeBody.RemoveFirst();
 
-            // Все, кроме последнего элемента туловища двигаются на место впередистоящей клетки
-            for (int i = 0; i < snakeBody.Count - 1; i++)
-            {
-                var next = snakeBody[i + 1];
-                snakeBody[i] = new Point(next.X, next.Y);
-            }
+            using var gr = Graphics.FromImage(pictureBox1.Image);
+            // Paint over the cell on which the last element of the snake's tail was located
+            gr.FillRectangle(Brushes.White, lastPeace.X * cellWidth, lastPeace.Y * cellHeight, cellWidth, cellHeight);
+            gr.DrawRectangle(Pens.Black, lastPeace.X * cellWidth, lastPeace.Y * cellHeight, cellWidth, cellHeight);
 
-            // Последний элемент теперь будет находится на координате, на которой раньше была голова
-            snakeBody[^1] = new Point(snakeHead.X - delta.X, snakeHead.Y - delta.Y);
+            snakeBody.AddLast(snakeHead);
+            snakeHead = new Point(snakeHead.X + delta.X, snakeHead.Y + delta.Y);
+
+            gr.FillRectangle(Brushes.Black, snakeHead.X * cellWidth, snakeHead.Y * cellHeight, cellWidth, cellHeight);
+            pictureBox1.Invalidate();
         }
     }
 
