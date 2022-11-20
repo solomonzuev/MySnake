@@ -110,13 +110,13 @@ namespace MySnakeUI
             gr.Clear(Color.White);
 
             // Draw vertical lines
-            for (int i = 1; i < cols; i++)
+            for (int i = 0; i < cols; i++)
             {
                 gr.DrawLine(Pens.Black, cellWidth * i, 0, cellWidth * i, pictureBox1.Height);
             }
 
             // Draw horizontal lines
-            for (int i = 1; i < rows; i++)
+            for (int i = 0; i < rows; i++)
             {
                 gr.DrawLine(Pens.Black, 0, cellHeight * i, pictureBox1.Width, cellHeight * i);
             }
